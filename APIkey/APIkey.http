@@ -1,6 +1,57 @@
 @APIkey_HostAddress = http://localhost:5009
+@ApiKey = ROBE-LINGO-KEY-1234
 
-GET {{APIkey_HostAddress}}/weatherforecast/
+### Obtener todos los productos (con API Key)
+GET {{APIkey_HostAddress}}/api/products
 Accept: application/json
+X-API-KEY: {{ApiKey}}
+
+###
+
+### Intentar obtener productos sin API Key (debe retornar 401 Unauthorized)
+GET {{APIkey_HostAddress}}/api/products
+Accept: application/json
+
+###
+
+### Obtener producto por ID
+GET {{APIkey_HostAddress}}/api/products/1
+Accept: application/json
+X-API-KEY: {{ApiKey}}
+
+###
+
+### Crear un nuevo producto
+POST {{APIkey_HostAddress}}/api/products
+Content-Type: application/json
+X-API-KEY: {{ApiKey}}
+
+{
+  "productName": "Nuevo Producto de Prueba",
+  "unitPrice": 19.99,
+  "unitsInStock": 50,
+  "discontinued": false
+}
+
+###
+
+### Actualizar un producto existente
+PUT {{APIkey_HostAddress}}/api/products/1
+Content-Type: application/json
+X-API-KEY: {{ApiKey}}
+
+{
+  "productId": 1,
+  "productName": "Producto Modificado",
+  "unitPrice": 25.00,
+  "unitsInStock": 45,
+  "discontinued": false
+}
+
+###
+
+### Eliminar un producto
+DELETE {{APIkey_HostAddress}}/api/products/1
+X-API-KEY: {{ApiKey}}
 
 ###
