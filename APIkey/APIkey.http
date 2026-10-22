@@ -1,57 +1,121 @@
 @APIkey_HostAddress = http://localhost:5009
 @ApiKey = ROBE-LINGO-KEY-1234
 
-### Obtener todos los productos (con API Key)
+### ========================================================
+### 1. PRODUCTOS (Consultas y DTOs)
+### ========================================================
+
+### Obtener resumen de productos (Total y lista ligera)
 GET {{APIkey_HostAddress}}/api/products
 Accept: application/json
 X-API-KEY: {{ApiKey}}
 
 ###
 
-### Intentar obtener productos sin API Key (debe retornar 401 Unauthorized)
-GET {{APIkey_HostAddress}}/api/products
-Accept: application/json
-
-###
-
-### Obtener producto por ID
+### Obtener producto existente por ID
 GET {{APIkey_HostAddress}}/api/products/1
 Accept: application/json
 X-API-KEY: {{ApiKey}}
 
 ###
 
-### Crear un nuevo producto
+### ========================================================
+### 2. PRUEBAS DE PROBLEM DETAILS (RFC 7807) Y ERRORES
+### ========================================================
+
+### Prueba 401: Solicitud sin API Key (Retorna ProblemDetails en JSON)
+GET {{APIkey_HostAddress}}/api/products
+Accept: application/json
+
+###
+
+### Prueba 401: API Key incorrecta (Retorna ProblemDetails en JSON)
+GET {{APIkey_HostAddress}}/api/products
+Accept: application/json
+X-API-KEY: CLAVE-INVALIDA-9999
+
+###
+
+### Prueba 404: Producto no encontrado (Retorna ProblemDetails en JSON)
+GET {{APIkey_HostAddress}}/api/products/999999
+Accept: application/json
+X-API-KEY: {{ApiKey}}
+
+###
+
+### Prueba 400: Validación con DataAnnotations fallida (Campos obligatorios / valores inválidos)
 POST {{APIkey_HostAddress}}/api/products
 Content-Type: application/json
 X-API-KEY: {{ApiKey}}
 
 {
-  "productName": "Nuevo Producto de Prueba",
-  "unitPrice": 19.99,
-  "unitsInStock": 50,
-  "discontinued": false
+  "productName": "",
+  "unitPrice": -10.00,
+  "unitsInStock": -5
 }
 
 ###
 
-### Actualizar un producto existente
-PUT {{APIkey_HostAddress}}/api/products/1
+### Prueba 201: Crear producto válido con DTO
+POST {{APIkey_HostAddress}}/api/products
 Content-Type: application/json
 X-API-KEY: {{ApiKey}}
 
 {
-  "productId": 1,
-  "productName": "Producto Modificado",
-  "unitPrice": 25.00,
-  "unitsInStock": 45,
+  "productName": "Teclado Mecanico Escolar",
+  "unitPrice": 45.50,
+  "unitsInStock": 20,
   "discontinued": false
 }
 
 ###
 
-### Eliminar un producto
-DELETE {{APIkey_HostAddress}}/api/products/1
+### ========================================================
+### 3. CLIENTES (Solo CustomerId y Nombre)
+### ========================================================
+
+### Obtener lista de clientes
+GET {{APIkey_HostAddress}}/api/customers
+Accept: application/json
+X-API-KEY: {{ApiKey}}
+
+###
+
+### Obtener cliente por ID
+GET {{APIkey_HostAddress}}/api/customers/ALFKI
+Accept: application/json
+X-API-KEY: {{ApiKey}}
+
+###
+
+### Prueba 404: Cliente no encontrado
+GET {{APIkey_HostAddress}}/api/customers/NOEXISTE
+Accept: application/json
+X-API-KEY: {{ApiKey}}
+
+###
+
+### ========================================================
+### 4. ÓRDENES (Sin llaves foráneas)
+### ========================================================
+
+### Obtener órdenes
+GET {{APIkey_HostAddress}}/api/orders
+Accept: application/json
+X-API-KEY: {{ApiKey}}
+
+###
+
+### Obtener orden específica por ID
+GET {{APIkey_HostAddress}}/api/orders/10248
+Accept: application/json
+X-API-KEY: {{ApiKey}}
+
+###
+
+### Prueba 404: Orden no encontrada
+GET {{APIkey_HostAddress}}/api/orders/999999
+Accept: application/json
 X-API-KEY: {{ApiKey}}
 
 ###

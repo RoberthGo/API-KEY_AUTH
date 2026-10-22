@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using APIkey.Data;
+using APIkey.DTOs;
 using APIkey.Filters;
 using APIkey.Models;
 
@@ -21,74 +22,127 @@ namespace APIkey.Controllers
         }
 
         // GET: api/Products
+        // Retorna la cantidad total de productos y solo nombre, precio y stock de cada uno
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
+        public async Task<ActionResult<ProductsSummaryDto>> GetProducts()
         {
-            return await _context.Products.ToListAsync();
+            var total = await _context.Products.CountAsync();
+            var products = await _context.Products
+                .AsNoTracking()
+                .Select(p => new ProductDto
+                {
+                    ProductId = p.ProductId,
+                    ProductName = p.ProductName,
+                    UnitPrice = p.UnitPrice,
+                    UnitsInStock = p.UnitsInStock
+                })
+                .ToListAsync();
+
+            return Ok(new ProductsSummaryDto
+            {
+                TotalProducts = total,
+                Products = products
+            });
         }
 
         // GET: api/Products/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<Product>> GetProduct(int id)
+        public async Task<ActionResult<ProductDto>> GetProduct(int id)
         {
-            var product = await _context.Products.FindAsync(id);
+            var product = await _context.Products
+                .AsNoTracking()
+                .Where(p => p.ProductId == id)
+                .Select(p => new ProductDto
+                {
+                    ProductId = p.ProductId,
+                    ProductName = p.ProductName,
+                    UnitPrice = p.UnitPrice,
+                    UnitsInStock = p.UnitsInStock
+                })
+                .FirstOrDefaultAsync();
 
             if (product == null)
             {
-                return NotFound();
+                return Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Producto no encontrado",
+                    detail: $"No se encontró ningún producto con el identificador {id}."
+                );
             }
 
-            return product;
-        }
-
-        // PUT: api/Products/5
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutProduct(int id, Product product)
-        {
-            if (id != product.ProductId)
-            {
-                return BadRequest("El ID proporcionado no coincide con el identificador del producto.");
-            }
-
-            _context.Entry(product).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ProductExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-            catch (DbUpdateException ex)
-            {
-                return BadRequest(new { message = "Error al actualizar el producto en la base de datos.", error = ex.InnerException?.Message ?? ex.Message });
-            }
-
-            return NoContent();
+            return Ok(product);
         }
 
         // POST: api/Products
+        // Valida con DataAnnotations antes de guardar
         [HttpPost]
-        public async Task<ActionResult<Product>> PostProduct(Product product)
+        public async Task<ActionResult<ProductDto>> PostProduct(ProductUpsertDto dto)
         {
             try
             {
+                var product = new Product
+                {
+                    ProductName = dto.ProductName,
+                    UnitPrice = dto.UnitPrice,
+                    UnitsInStock = dto.UnitsInStock,
+                    Discontinued = dto.Discontinued
+                };
+
                 _context.Products.Add(product);
                 await _context.SaveChangesAsync();
 
-                return CreatedAtAction(nameof(GetProduct), new { id = product.ProductId }, product);
+                var responseDto = new ProductDto
+                {
+                    ProductId = product.ProductId,
+                    ProductName = product.ProductName,
+                    UnitPrice = product.UnitPrice,
+                    UnitsInStock = product.UnitsInStock
+                };
+
+                return CreatedAtAction(nameof(GetProduct), new { id = product.ProductId }, responseDto);
             }
             catch (DbUpdateException ex)
             {
-                return BadRequest(new { message = "Error al crear el producto en la base de datos.", error = ex.InnerException?.Message ?? ex.Message });
+                return Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Error al registrar producto",
+                    detail: ex.InnerException?.Message ?? ex.Message
+                );
+            }
+        }
+
+        // PUT: api/Products/5
+        // Actualiza un producto existente validando los datos recibidos
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutProduct(int id, ProductUpsertDto dto)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product == null)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Producto no encontrado",
+                    detail: $"No se encontró ningún producto con el identificador {id} para actualizar."
+                );
+            }
+
+            product.ProductName = dto.ProductName;
+            product.UnitPrice = dto.UnitPrice;
+            product.UnitsInStock = dto.UnitsInStock;
+            product.Discontinued = dto.Discontinued;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                return NoContent();
+            }
+            catch (DbUpdateException ex)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Error al actualizar producto",
+                    detail: ex.InnerException?.Message ?? ex.Message
+                );
             }
         }
 
@@ -99,25 +153,27 @@ namespace APIkey.Controllers
             var product = await _context.Products.FindAsync(id);
             if (product == null)
             {
-                return NotFound();
+                return Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Producto no encontrado",
+                    detail: $"No se encontró ningún producto con el identificador {id} para eliminar."
+                );
             }
 
             try
             {
                 _context.Products.Remove(product);
                 await _context.SaveChangesAsync();
-
                 return NoContent();
             }
-            catch (DbUpdateException ex)
+            catch (DbUpdateException)
             {
-                return BadRequest(new { message = "No se puede eliminar el producto debido a restricciones de integridad referencial.", error = ex.InnerException?.Message ?? ex.Message });
+                return Problem(
+                    statusCode: StatusCodes.Status409Conflict,
+                    title: "Conflicto de integridad referencial",
+                    detail: $"El producto con ID {id} no puede ser eliminado porque tiene órdenes u otros registros vinculados."
+                );
             }
-        }
-
-        private bool ProductExists(int id)
-        {
-            return _context.Products.Any(e => e.ProductId == id);
         }
     }
 }

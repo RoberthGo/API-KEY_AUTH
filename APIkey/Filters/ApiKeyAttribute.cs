@@ -13,7 +13,7 @@ public class ApiKeyAttribute : ActionFilterAttribute, IAsyncActionFilter
 
     public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        // Allow CORS preflight requests through if they reach the action filter
+        // Permitir solicitudes preflight de CORS
         if (HttpMethods.IsOptions(context.HttpContext.Request.Method))
         {
             await next();
@@ -23,10 +23,18 @@ public class ApiKeyAttribute : ActionFilterAttribute, IAsyncActionFilter
         if (!context.HttpContext.Request.Headers.TryGetValue(API_KEY_HEADER_NAME, out var extractedApiKey) ||
             string.IsNullOrWhiteSpace(extractedApiKey))
         {
-            context.Result = new ContentResult()
+            var problemDetails = new ProblemDetails
+            {
+                Status = StatusCodes.Status401Unauthorized,
+                Title = "No autorizado",
+                Detail = "No se proporcionó la API Key en la cabecera 'X-API-KEY'.",
+                Instance = context.HttpContext.Request.Path
+            };
+
+            context.Result = new ObjectResult(problemDetails)
             {
                 StatusCode = StatusCodes.Status401Unauthorized,
-                Content = "API Key no proporcionada."
+                ContentTypes = { "application/problem+json" }
             };
             return;
         }
@@ -36,10 +44,18 @@ public class ApiKeyAttribute : ActionFilterAttribute, IAsyncActionFilter
 
         if (string.IsNullOrEmpty(apiKey) || !string.Equals(apiKey.Trim(), extractedApiKey.ToString().Trim(), StringComparison.Ordinal))
         {
-            context.Result = new ContentResult()
+            var problemDetails = new ProblemDetails
+            {
+                Status = StatusCodes.Status401Unauthorized,
+                Title = "No autorizado",
+                Detail = "La API Key proporcionada no es válida.",
+                Instance = context.HttpContext.Request.Path
+            };
+
+            context.Result = new ObjectResult(problemDetails)
             {
                 StatusCode = StatusCodes.Status401Unauthorized,
-                Content = "Unauthorized client."
+                ContentTypes = { "application/problem+json" }
             };
             return;
         }

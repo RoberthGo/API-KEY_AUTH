@@ -1,9 +1,31 @@
 using APIkey.Data;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+
+// Soporte nativo para ProblemDetails (RFC 7807)
+builder.Services.AddProblemDetails();
+
+// Configuración de Swagger / OpenAPI con soporte para X-API-KEY
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
+    {
+        Description = "Introduce tu API Key en este formato: ROBE-LINGO-KEY-1234",
+        Type = SecuritySchemeType.ApiKey,
+        Name = "X-API-KEY",
+        In = ParameterLocation.Header
+    });
+
+    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("ApiKey", doc)] = new List<string>()
+    });
+});
 
 // Configure CORS to allow connections from any origin, method, and header
 builder.Services.AddCors(options =>
@@ -22,18 +44,26 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-
 // Register ContextDB for dependency injection
 builder.Services.AddDbContext<ContextDB>();
 
 var app = builder.Build();
 
+// Manejo centralizado de excepciones (500) en formato ProblemDetails
+app.UseExceptionHandler();
+
+// Convierte códigos de estado vacíos en ProblemDetails
+app.UseStatusCodePages();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "API Escolar v1");
+        c.RoutePrefix = "swagger";
+    });
 }
 
 app.UseHttpsRedirection();
