@@ -1,6 +1,5 @@
 using System;
-using System.Security.Cryptography;
-using System.Text;
+using APIkey.Controllers;
 using APIkey.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -57,7 +56,7 @@ public class ApiKeyAttribute : ActionFilterAttribute, IAsyncActionFilter
         }
 
         var dbContext = context.HttpContext.RequestServices.GetRequiredService<ContextDB>();
-        var providedApiKeyHash = HashApiKey(providedApiKey);
+        var providedApiKeyHash = ApiKeysController.HashApiKey(providedApiKey);
         var utcNow = DateTime.UtcNow;
 
         var exists = await dbContext.ApiKeys
@@ -85,12 +84,5 @@ public class ApiKeyAttribute : ActionFilterAttribute, IAsyncActionFilter
         }
 
         await next();
-    }
-
-    private static string HashApiKey(string plainTextKey)
-    {
-        using var sha256 = SHA256.Create();
-        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(plainTextKey));
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }

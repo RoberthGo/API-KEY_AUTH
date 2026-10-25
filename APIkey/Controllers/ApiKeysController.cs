@@ -2,17 +2,17 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using APIkey.Data;
 using APIkey.DTOs;
+using APIkey.Filters;
 using APIkey.Models;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 
 namespace APIkey.Controllers
 {
-    /// <summary>
-    /// Endpoint para la gestión y creación de API Keys.
-    /// </summary>
+    [EnableCors("AllowAll")]
     [Route("api/[controller]")]
     [ApiController]
     public class ApiKeysController : ControllerBase
@@ -24,71 +24,89 @@ namespace APIkey.Controllers
             _context = context;
         }
 
-        /// <summary>
-        /// Crea una nueva API Key para un cliente o usuario.
-        /// </summary>
-        /// <remarks>
-        /// Route: POST /api/apikeys
-        /// Method: HttpPost
-        /// Descripción: genera una clave segura, la almacena con hash y devuelve la versión legible solo una vez.
-        /// </remarks>
-        /// <param name="request">Datos del cliente, descripción y vigencia de la API Key.</param>
-        /// <returns>La respuesta con la API Key generada y sus datos de control.</returns>
-        [HttpPost]
-        [AllowAnonymous]
-        public async Task<ActionResult<ApiKeyCreatedResponseDto>> Post([FromBody] CreateApiKeyDto request)
+        // POST: api/apikeys/regenerate
+        // Invalida la API Key actual y genera una nueva para el mismo usuario
+        [HttpPost("regenerate")]
+        [ApiKey]
+        public async Task<ActionResult<ApiKeyCreatedResponseDto>> PostRegenerateApiKey()
         {
-            if (request is null)
+            if (!Request.Headers.TryGetValue("X-API-KEY", out var currentKeyHeader))
             {
-                return BadRequest("La solicitud es obligatoria.");
+                return Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "No autorizado",
+                    detail: "No se proporcionó la API Key en la cabecera 'X-API-KEY'."
+                );
             }
 
-            if (string.IsNullOrWhiteSpace(request.ClientIdentifier))
+            var currentKey = currentKeyHeader.ToString().Trim();
+            var currentKeyHash = HashApiKey(currentKey);
+
+            var currentApiKeyEntity = await _context.ApiKeys
+                .FirstOrDefaultAsync(k => k.KeyHash == currentKeyHash && k.IsActive);
+
+            if (currentApiKeyEntity == null)
             {
-                return BadRequest("El identificador del cliente es obligatorio.");
+                return Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "No autorizado",
+                    detail: "La API Key proporcionada no es válida o está inactiva."
+                );
             }
 
-            if (request.ValidityDays < 1 || request.ValidityDays > 3650)
+            try
             {
-                return BadRequest("Los días de vigencia deben estar entre 1 y 3650.");
+                // 1. Desactivar la llave actual (darla de baja al regenerar)
+                currentApiKeyEntity.IsActive = false;
+
+                // 2. Generar y guardar la nueva API Key para el mismo usuario
+                var newRawApiKey = GenerateApiKey();
+                var createdAt = DateTime.UtcNow;
+                var expiresAt = createdAt.AddDays(30);
+
+                var newApiKeyEntity = new ApiKey
+                {
+                    ClientIdentifier = currentApiKeyEntity.ClientIdentifier,
+                    KeyHash = HashApiKey(newRawApiKey),
+                    CreatedAt = createdAt,
+                    ExpiresAt = expiresAt,
+                    IsActive = true
+                };
+
+                _context.ApiKeys.Add(newApiKeyEntity);
+                await _context.SaveChangesAsync();
+
+                return Ok(new ApiKeyCreatedResponseDto
+                {
+                    Id = newApiKeyEntity.Id,
+                    ClientIdentifier = newApiKeyEntity.ClientIdentifier,
+                    ApiKey = newRawApiKey,
+                    CreatedAt = createdAt,
+                    IsActive = true,
+                    ExpiresAt = expiresAt
+                });
             }
-
-            var generatedApiKey = GenerateApiKey();
-            var createdAt = DateTime.UtcNow;
-            var expiresAt = createdAt.AddDays(request.ValidityDays);
-
-            var apiKeyEntity = new ApiKey
+            catch (DbUpdateException ex)
             {
-                ClientIdentifier = request.ClientIdentifier.Trim(),
-                KeyHash = HashApiKey(generatedApiKey),
-                CreatedAt = createdAt,
-                IsActive = true,
-                ExpiresAt = expiresAt
-            };
-
-            _context.ApiKeys.Add(apiKeyEntity);
-            await _context.SaveChangesAsync();
-
-            var response = new ApiKeyCreatedResponseDto
-            {
-                Id = apiKeyEntity.Id,
-                ClientIdentifier = apiKeyEntity.ClientIdentifier,
-                ApiKey = generatedApiKey,
-                CreatedAt = apiKeyEntity.CreatedAt,
-                IsActive = apiKeyEntity.IsActive,
-                ExpiresAt = apiKeyEntity.ExpiresAt
-            };
-
-            return Ok(response);
+                return Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Error al regenerar API Key",
+                    detail: ex.InnerException?.Message ?? ex.Message
+                );
+            }
         }
 
-        private static string GenerateApiKey()
+        // ==========================================
+        // Métodos Auxiliares Compartidos
+        // ==========================================
+
+        public static string GenerateApiKey()
         {
             var randomBytes = RandomNumberGenerator.GetBytes(32);
             return $"ak_{Convert.ToHexString(randomBytes).ToLowerInvariant()}";
         }
 
-        private static string HashApiKey(string plainTextKey)
+        public static string HashApiKey(string plainTextKey)
         {
             using var sha256 = SHA256.Create();
             var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(plainTextKey));

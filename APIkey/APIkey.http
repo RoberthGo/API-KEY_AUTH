@@ -119,3 +119,43 @@ Accept: application/json
 X-API-KEY: {{ApiKey}}
 
 ###
+
+
+### ========================================================
+### 5. AUTENTICACIÓN (Registro y Login)
+### ========================================================
+
+### Registrar un nuevo usuario (Crea el usuario y emite su primera API Key)
+POST {{APIkey_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "roberth",
+  "email": "roberth@itsur.edu.mx",
+  "password": "Password123*"
+}
+
+###
+
+### Iniciar sesión (Valida credenciales y genera una nueva API Key)
+POST {{APIkey_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "roberth",
+  "password": "Password123*"
+}
+
+###
+
+### Probar endpoint protegido usando la API Key devuelta por Login o Register
+GET {{APIkey_HostAddress}}/api/products
+Accept: application/json
+X-API-KEY: ak_pega_aqui_tu_clave
+
+
+###
+### Regenerar API Key (Invalida la actual y emite una nueva para el mismo usuario)
+POST {{APIkey_HostAddress}}/api/apikeys/regenerate
+Accept: application/json
+X-API-KEY: ak_pega_aqui_tu_clave_actual
