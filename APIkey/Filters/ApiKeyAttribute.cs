@@ -1,6 +1,11 @@
+using System;
+using System.Security.Cryptography;
+using System.Text;
+using APIkey.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -39,16 +44,35 @@ public class ApiKeyAttribute : ActionFilterAttribute, IAsyncActionFilter
             return;
         }
 
-        var appSettings = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
-        var apiKey = appSettings.GetValue<string>("ApiKey") ?? appSettings.GetValue<string>("ApiSettings:ApiKey");
+        var providedApiKey = extractedApiKey.ToString().Trim();
 
-        if (string.IsNullOrEmpty(apiKey) || !string.Equals(apiKey.Trim(), extractedApiKey.ToString().Trim(), StringComparison.Ordinal))
+        var appSettings = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
+        var configuredApiKey = appSettings.GetValue<string>("ApiKey") ?? appSettings.GetValue<string>("ApiSettings:ApiKey");
+
+        if (!string.IsNullOrWhiteSpace(configuredApiKey) &&
+            string.Equals(configuredApiKey.Trim(), providedApiKey, StringComparison.Ordinal))
+        {
+            await next();
+            return;
+        }
+
+        var dbContext = context.HttpContext.RequestServices.GetRequiredService<ContextDB>();
+        var providedApiKeyHash = HashApiKey(providedApiKey);
+        var utcNow = DateTime.UtcNow;
+
+        var exists = await dbContext.ApiKeys
+            .AsNoTracking()
+            .AnyAsync(k => k.KeyHash == providedApiKeyHash &&
+                           k.IsActive &&
+                           (k.ExpiresAt == null || k.ExpiresAt > utcNow));
+
+        if (!exists)
         {
             var problemDetails = new ProblemDetails
             {
                 Status = StatusCodes.Status401Unauthorized,
                 Title = "No autorizado",
-                Detail = "La API Key proporcionada no es válida.",
+                Detail = "La API Key proporcionada no es válida o está expirada.",
                 Instance = context.HttpContext.Request.Path
             };
 
@@ -61,5 +85,12 @@ public class ApiKeyAttribute : ActionFilterAttribute, IAsyncActionFilter
         }
 
         await next();
+    }
+
+    private static string HashApiKey(string plainTextKey)
+    {
+        using var sha256 = SHA256.Create();
+        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(plainTextKey));
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }
