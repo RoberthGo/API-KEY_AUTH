@@ -29,6 +29,7 @@ public partial class ContextDB : DbContext
 
     public virtual DbSet<ApiKey> ApiKeys { get; set; }
 
+    public virtual DbSet<User> Users { get; set; }
     public virtual DbSet<Product> Products { get; set; }
 
     public virtual DbSet<Shipper> Shippers { get; set; }
@@ -43,6 +44,21 @@ public partial class ContextDB : DbContext
         modelBuilder
             .UseCollation("utf8mb4_0900_ai_ci")
             .HasCharSet("utf8mb4");
+        
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("users");
+
+            entity.HasIndex(e => e.Username).IsUnique();
+            entity.HasIndex(e => e.Email).IsUnique();
+
+            entity.Property(e => e.Username).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Email).HasMaxLength(150).IsRequired();
+            entity.Property(e => e.PasswordHash).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").IsRequired();
+            entity.Property(e => e.IsActive).HasColumnType("tinyint(1)").IsRequired();
+        });
 
         modelBuilder.Entity<Category>(entity =>
         {
