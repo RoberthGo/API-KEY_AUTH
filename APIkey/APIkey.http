@@ -154,31 +154,8 @@ Accept: application/json
 X-API-KEY: ak_pega_aqui_tu_clave
 
 
-### ========================================================
-### 6. GESTIÓN DE API KEYS (Listar, Crear y Revocar)
-### ========================================================
-
-### 1. Listar todas las API Keys de un usuario
-GET {{APIkey_HostAddress}}/api/apikeys/user/roberth
+###
+### Regenerar API Key (Invalida la actual y emite una nueva para el mismo usuario)
+POST {{APIkey_HostAddress}}/api/auth/regenerate-key
 Accept: application/json
-
-###
-
-### 2. Crear una nueva API Key para un usuario
-POST {{APIkey_HostAddress}}/api/apikeys
-Content-Type: application/json
-
-{
-  "clientIdentifier": "roberth",
-  "validityDays": 30
-}
-
-###
-
-### 3. Revocar una API Key con ID y confirmación de contraseña
-POST {{APIkey_HostAddress}}/api/apikeys/1/revoke
-Content-Type: application/json
-
-{
-  "password": "Password123*"
-}
+X-API-KEY: ak_pega_aqui_tu_clave_actual

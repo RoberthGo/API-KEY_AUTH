@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using APIkey.Data;
 using APIkey.DTOs;
+using APIkey.Filters;
 using APIkey.Models;
 
 namespace APIkey.Controllers
@@ -158,6 +159,84 @@ namespace APIkey.Controllers
             }
         }
 
+        // POST: api/auth/regenerate-key
+        // Invalida la API Key actual y genera una nueva para el mismo usuario
+        [HttpPost("regenerate-key")]
+        [ApiKey]
+        public async Task<ActionResult<AuthResponseDto>> PostRegenerateKey()
+        {
+            // Extraer la API Key actual de la cabecera
+            if (!Request.Headers.TryGetValue("X-API-KEY", out var currentKeyHeader))
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "No autorizado",
+                    detail: "No se proporcionó la API Key en la cabecera 'X-API-KEY'."
+                );
+            }
+
+            var currentKey = currentKeyHeader.ToString().Trim();
+            var currentKeyHash = ApiKeysController.HashApiKey(currentKey);
+
+            // Buscar la llave actual en base de datos
+            var currentApiKeyEntity = await _context.ApiKeys
+                .FirstOrDefaultAsync(k => k.KeyHash == currentKeyHash && k.IsActive);
+
+            if (currentApiKeyEntity == null)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "No autorizado",
+                    detail: "La API Key proporcionada no es válida o está inactiva."
+                );
+            }
+
+            try
+            {
+                // 1. Desactivar la llave actual (darla de baja al regenerar)
+                currentApiKeyEntity.IsActive = false;
+
+                // 2. Generar y guardar la nueva API Key
+                var newRawApiKey = ApiKeysController.GenerateApiKey();
+                var createdAt = DateTime.UtcNow;
+                var expiresAt = createdAt.AddDays(30);
+
+                var newApiKeyEntity = new ApiKey
+                {
+                    ClientIdentifier = currentApiKeyEntity.ClientIdentifier,
+                    KeyHash = ApiKeysController.HashApiKey(newRawApiKey),
+                    CreatedAt = createdAt,
+                    ExpiresAt = expiresAt,
+                    IsActive = true
+                };
+
+                _context.ApiKeys.Add(newApiKeyEntity);
+
+                // Obtener datos del usuario
+                var user = await _context.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Username.ToLower() == currentApiKeyEntity.ClientIdentifier.ToLower());
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new AuthResponseDto
+                {
+                    UserId = user?.Id ?? 0,
+                    Username = currentApiKeyEntity.ClientIdentifier,
+                    ApiKey = newRawApiKey,
+                    ExpiresAt = expiresAt
+                });
+            }
+            catch (DbUpdateException ex)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Error al regenerar API Key",
+                    detail: ex.InnerException?.Message ?? ex.Message
+                );
+            }
+        }
+
         // ==========================================
         // Métodos Auxiliares de Seguridad (Contraseñas)
         // ==========================================
@@ -175,7 +254,7 @@ namespace APIkey.Controllers
             return $"{Convert.ToHexString(salt)}:{Convert.ToHexString(hash)}";
         }
 
-        public static bool VerifyPassword(string password, string storedHash)
+        private static bool VerifyPassword(string password, string storedHash)
         {
             var parts = storedHash.Split(':');
             if (parts.Length != 2) return false;
