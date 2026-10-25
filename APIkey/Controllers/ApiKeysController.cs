@@ -24,48 +24,6 @@ namespace APIkey.Controllers
             _context = context;
         }
 
-        // POST: api/apikeys
-        // Crea una API Key para un cliente o usuario
-        [HttpPost]
-        public async Task<ActionResult<ApiKeyCreatedResponseDto>> Post([FromBody] CreateApiKeyDto request)
-        {
-            if (string.IsNullOrWhiteSpace(request.ClientIdentifier))
-            {
-                return Problem(
-                    statusCode: StatusCodes.Status400BadRequest,
-                    title: "Dato requerido",
-                    detail: "El identificador del cliente es obligatorio."
-                );
-            }
-
-            var generatedApiKey = GenerateApiKey();
-            var createdAt = DateTime.UtcNow;
-            var validityDays = request.ValidityDays > 0 ? request.ValidityDays : 30;
-            var expiresAt = createdAt.AddDays(validityDays);
-
-            var apiKeyEntity = new ApiKey
-            {
-                ClientIdentifier = request.ClientIdentifier.Trim(),
-                KeyHash = HashApiKey(generatedApiKey),
-                CreatedAt = createdAt,
-                IsActive = true,
-                ExpiresAt = expiresAt
-            };
-
-            _context.ApiKeys.Add(apiKeyEntity);
-            await _context.SaveChangesAsync();
-
-            return StatusCode(StatusCodes.Status201Created, new ApiKeyCreatedResponseDto
-            {
-                Id = apiKeyEntity.Id,
-                ClientIdentifier = apiKeyEntity.ClientIdentifier,
-                ApiKey = generatedApiKey,
-                CreatedAt = apiKeyEntity.CreatedAt,
-                IsActive = apiKeyEntity.IsActive,
-                ExpiresAt = apiKeyEntity.ExpiresAt
-            });
-        }
-
         // POST: api/apikeys/regenerate
         // Invalida la API Key actual y genera una nueva para el mismo usuario
         [HttpPost("regenerate")]
