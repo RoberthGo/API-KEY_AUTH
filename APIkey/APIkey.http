@@ -156,6 +156,6 @@ X-API-KEY: ak_pega_aqui_tu_clave
 
 ###
 ### Regenerar API Key (Invalida la actual y emite una nueva para el mismo usuario)
-POST {{APIkey_HostAddress}}/api/auth/regenerate-key
+POST {{APIkey_HostAddress}}/api/apikeys/regenerate
 Accept: application/json
 X-API-KEY: ak_pega_aqui_tu_clave_actual

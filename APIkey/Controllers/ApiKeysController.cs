@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using APIkey.Data;
 using APIkey.DTOs;
+using APIkey.Filters;
 using APIkey.Models;
 
 namespace APIkey.Controllers
@@ -63,6 +64,78 @@ namespace APIkey.Controllers
                 IsActive = apiKeyEntity.IsActive,
                 ExpiresAt = apiKeyEntity.ExpiresAt
             });
+        }
+
+        // POST: api/apikeys/regenerate
+        // Invalida la API Key actual y genera una nueva para el mismo usuario
+        [HttpPost("regenerate")]
+        [ApiKey]
+        public async Task<ActionResult<ApiKeyCreatedResponseDto>> PostRegenerateApiKey()
+        {
+            if (!Request.Headers.TryGetValue("X-API-KEY", out var currentKeyHeader))
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "No autorizado",
+                    detail: "No se proporcionó la API Key en la cabecera 'X-API-KEY'."
+                );
+            }
+
+            var currentKey = currentKeyHeader.ToString().Trim();
+            var currentKeyHash = HashApiKey(currentKey);
+
+            var currentApiKeyEntity = await _context.ApiKeys
+                .FirstOrDefaultAsync(k => k.KeyHash == currentKeyHash && k.IsActive);
+
+            if (currentApiKeyEntity == null)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "No autorizado",
+                    detail: "La API Key proporcionada no es válida o está inactiva."
+                );
+            }
+
+            try
+            {
+                // 1. Desactivar la llave actual (darla de baja al regenerar)
+                currentApiKeyEntity.IsActive = false;
+
+                // 2. Generar y guardar la nueva API Key para el mismo usuario
+                var newRawApiKey = GenerateApiKey();
+                var createdAt = DateTime.UtcNow;
+                var expiresAt = createdAt.AddDays(30);
+
+                var newApiKeyEntity = new ApiKey
+                {
+                    ClientIdentifier = currentApiKeyEntity.ClientIdentifier,
+                    KeyHash = HashApiKey(newRawApiKey),
+                    CreatedAt = createdAt,
+                    ExpiresAt = expiresAt,
+                    IsActive = true
+                };
+
+                _context.ApiKeys.Add(newApiKeyEntity);
+                await _context.SaveChangesAsync();
+
+                return Ok(new ApiKeyCreatedResponseDto
+                {
+                    Id = newApiKeyEntity.Id,
+                    ClientIdentifier = newApiKeyEntity.ClientIdentifier,
+                    ApiKey = newRawApiKey,
+                    CreatedAt = createdAt,
+                    IsActive = true,
+                    ExpiresAt = expiresAt
+                });
+            }
+            catch (DbUpdateException ex)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Error al regenerar API Key",
+                    detail: ex.InnerException?.Message ?? ex.Message
+                );
+            }
         }
 
         // ==========================================
