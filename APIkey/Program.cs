@@ -1,4 +1,5 @@
 using APIkey.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -56,15 +57,13 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Swagger habilitado para todos los entornos (incluido Azure)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "API Escolar v1");
-        c.RoutePrefix = "swagger";
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "API Escolar v1");
+    c.RoutePrefix = string.Empty;
+});
 
 app.UseHttpsRedirection();
 
@@ -74,5 +73,12 @@ app.UseCors("AllowAll");
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Aplica automáticamente las migraciones pendientes en la BD de Azure al iniciar
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ContextDB>();
+    dbContext.Database.Migrate();
+}
 
 app.Run();
