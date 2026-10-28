@@ -16,7 +16,7 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
     {
-        Description = "Introduce tu API Key en este formato: ROBE-LINGO-KEY-1234",
+        Description = "Introduce tu API Key en este formato:",
         Type = SecuritySchemeType.ApiKey,
         Name = "X-API-KEY",
         In = ParameterLocation.Header

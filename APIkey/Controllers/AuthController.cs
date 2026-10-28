@@ -124,6 +124,14 @@ namespace APIkey.Controllers
 
             try
             {
+                // 1. Invalidar todas las API Keys anteriores activas de este usuario
+                var oldKeys = await _context.ApiKeys
+                    .Where(k => k.ClientIdentifier.ToLower() == user.Username.ToLower() && k.IsActive)
+                    .ToListAsync();
+
+                oldKeys.ForEach(k => k.IsActive = false);
+
+                // 2. Generar y guardar la nueva API Key
                 var rawApiKey = ApiKeysController.GenerateApiKey();
                 var createdAt = DateTime.UtcNow;
                 var expiresAt = createdAt.AddDays(30);
