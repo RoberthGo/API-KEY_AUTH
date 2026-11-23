@@ -1,6 +1,5 @@
 using APIkey.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,24 +8,6 @@ builder.Services.AddControllers();
 
 // Soporte nativo para ProblemDetails (RFC 7807)
 builder.Services.AddProblemDetails();
-
-// Configuración de Swagger / OpenAPI con soporte para X-API-KEY
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
-    {
-        Description = "Introduce tu API Key en este formato:",
-        Type = SecuritySchemeType.ApiKey,
-        Name = "X-API-KEY",
-        In = ParameterLocation.Header
-    });
-
-    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference("ApiKey", doc)] = new List<string>()
-    });
-});
 
 // Configure CORS to allow connections from any origin, method, and header
 builder.Services.AddCors(options =>
@@ -55,15 +36,6 @@ app.UseExceptionHandler();
 
 // Convierte códigos de estado vacíos en ProblemDetails
 app.UseStatusCodePages();
-
-// Configure the HTTP request pipeline.
-// Swagger habilitado para todos los entornos (incluido Azure)
-app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "API Escolar v1");
-    c.RoutePrefix = string.Empty;
-});
 
 app.UseHttpsRedirection();
 
